@@ -544,25 +544,6 @@ All five scenarios are available via the **Demo** tab in the UI or via the REST 
 - **Verified:** ✅ PASS (all_blocked = True)
 
 ---
-
-## Screenshots
-
-> Screenshots of the running application are available in the `docs/screenshots/` directory.
-
-| Screen | Description |
-|--------|-------------|
-| Login Page | JWT authentication form |
-| Dashboard | Application overview + metrics charts |
-| Upload Page | Document upload with drag-and-drop |
-| Scoring Page | Weighted policy score breakdown (Clauses 3.1–3.4) |
-| Recommendation Page | AI recommendation with per-clause explanations |
-| Fairness Page | Identity-blind comparison results |
-| Human Review | Underwriter approve/decline interface |
-| Audit Trail | Chronological SHA-256 signed audit log |
-| Demo Page | One-click test scenario runner |
-
----
-
 ## Future Enhancements
 
 | Enhancement | Priority | Description |
@@ -577,27 +558,4 @@ All five scenarios are available via the **Demo** tab in the UI or via the REST 
 | External Credit Bureau | Low | Integrate real credit score APIs (CIBIL, Experian) |
 | Fine-tuned LLM | Low | Train a domain-specific model on anonymised loan data |
 | Advanced Bias Detection | Low | Incorporate statistical fairness metrics (demographic parity, equalised odds) |
-
 ---
-
-## Contributors
-
-| Name | Role |
-|------|------|
-| Navyasri Buggana | Full-Stack Developer, AI/ML Engineer |
-
----
-
-## License
-
-This project is submitted as part of an academic/capstone programme. All rights reserved.
-
----
-
-## Acknowledgements
-
-- [LangGraph](https://github.com/langchain-ai/langgraph) — Agent workflow orchestration
-- [FastAPI](https://fastapi.tiangolo.com/) — Modern Python API framework
-- [OpenRouter](https://openrouter.ai/) — Unified LLM API
-- [React](https://react.dev/) — Frontend UI framework
-- [Tailwind CSS](https://tailwindcss.com/) — Utility-first CSS framework
