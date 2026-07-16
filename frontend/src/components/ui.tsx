@@ -6,7 +6,8 @@
  *   Spinner, Alert, ProgressBar, RecommendationBadge, FairnessResult
  */
 
-import { ReactNode } from 'react'
+import type { ReactNode } from 'react'
+import * as React from 'react'
 import { clsx } from 'clsx'
 import type { PolicyCriterion, ScoreBreakdown } from '../api/client'
 
@@ -386,7 +387,7 @@ const STAGES = [
   'Human Review',
 ]
 
-export function WorkflowProgress({ currentStage }: { currentStage: number }) {
+export function WorkflowProgress({ currentStage }: { currentStage: number }): React.JSX.Element {
   return (
     <div className="flex items-center gap-1 overflow-x-auto pb-2">
       {STAGES.map((stage, i) => (

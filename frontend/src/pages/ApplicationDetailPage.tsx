@@ -212,10 +212,10 @@ export default function ApplicationDetailPage() {
       </div>
 
       {/* AI Recommendation preview */}
-      {recommendation?.recommendation && (
+      {typeof recommendation?.recommendation === 'string' && (
         <Card title="AI Recommendation">
           <div className="flex items-center gap-4 flex-wrap">
-            <RecommendationBadge rec={String(recommendation.recommendation)} size="lg" />
+            <RecommendationBadge rec={recommendation.recommendation} size="lg" />
             <div>
               <p className="text-sm text-slate-600">{String(recommendation.reason ?? '')}</p>
               <p className="text-xs text-slate-400 mt-1">
@@ -251,3 +251,6 @@ export default function ApplicationDetailPage() {
     </div>
   )
 }
+
+
+

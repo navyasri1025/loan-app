@@ -2,7 +2,7 @@
  * Layout — main app shell with sidebar navigation.
  */
 
-import { ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { clsx } from 'clsx'
 import { useAuth } from '../context/AuthContext'

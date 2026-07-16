@@ -13,7 +13,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { getRecommendation } from '../api/client'
+import { getRecommendation, type ScoreBreakdown } from '../api/client'
 import {
   Card,
   Alert,
@@ -23,29 +23,31 @@ import {
 } from '../components/ui'
 import { clsx } from 'clsx'
 
+type RecommendationData = Awaited<ReturnType<typeof getRecommendation>>
+
 export default function RecommendationPage() {
   const { id } = useParams<{ id: string }>()
   const appId = Number(id)
 
-  const [data, setData] = useState<Record<string, unknown> | null>(null)
+  const [data, setData] = useState<RecommendationData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     getRecommendation(appId)
-      .then((r) => setData(r as unknown as Record<string, unknown>))
+      .then((r) => setData(r))
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
   }, [appId])
 
   if (loading) return <div className="flex justify-center pt-20"><Spinner size="lg" /></div>
 
-  const rec = data?.recommendation as string | undefined
+  const rec = data?.recommendation
   const confidence = Number(data?.confidence ?? 0)
-  const reason = data?.reason as string | undefined
-  const citations = (data?.policy_citations as string[]) ?? []
-  const scores = data?.score_breakdown as Record<string, unknown> | undefined
-  const fullDetails = data?.full_details as Record<string, unknown> | undefined
+  const reason = data?.reason
+  const citations = data?.policy_citations ?? []
+  const scores: ScoreBreakdown | undefined = data?.score_breakdown
+  const fullDetails = data?.full_details
   const aiRec = fullDetails?.ai_recommendation as Record<string, unknown> | undefined
   const explanation = aiRec?.explanation as string | undefined
 
@@ -150,9 +152,9 @@ export default function RecommendationPage() {
           )}
 
           {/* Policy score breakdown */}
-          {scores && (scores as { criteria?: unknown }).criteria && (
+          {scores && scores.criteria && (
             <Card title="Score Breakdown">
-              <PolicyScoreTable scores={scores as Parameters<typeof PolicyScoreTable>[0]['scores']} />
+              <PolicyScoreTable scores={scores} />
             </Card>
           )}
 
