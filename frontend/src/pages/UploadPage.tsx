@@ -7,7 +7,7 @@
 
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { createApplication, uploadDocument } from '../api/client'
+import { createApplication, uploadDocument, processApplication } from '../api/client'
 import { Alert, Card, Spinner, WorkflowProgress } from '../components/ui'
 
 const REQUIRED_DOCS = [
@@ -36,6 +36,7 @@ export default function UploadPage() {
     employer_name: '',
     employment_type: 'Salaried',
     employment_stability_months: '12',
+    credit_score: '',
     phone: '',
     date_of_birth: '',
     address: '',
@@ -45,6 +46,7 @@ export default function UploadPage() {
   // Step 2: File uploads state
   const [files, setFiles] = useState<Record<string, File | null>>({})
   const [uploaded, setUploaded] = useState<Record<string, boolean>>({})
+  const [uploading, setUploading] = useState<Record<string, boolean>>({})
 
   // ── Step 1: Create application ────────────────────────────────────────────
 
@@ -68,23 +70,33 @@ export default function UploadPage() {
 
   // ── Step 2: Upload documents ──────────────────────────────────────────────
 
-  async function handleUpload(docType: string) {
-    const file = files[docType]
-    if (!file || !appId) return
-    setLoading(true)
+  async function handleUpload(docType: string, currentAppId: number, file: File) {
+    setUploading((prev) => ({ ...prev, [docType]: true }))
     setError(null)
     try {
-      await uploadDocument(appId, docType, file)
+      await uploadDocument(currentAppId, docType, file)
       setUploaded((prev) => ({ ...prev, [docType]: true }))
+      setFiles((prev) => ({ ...prev, [docType]: null }))
     } catch (err) {
       setError(err instanceof Error ? err.message : `Failed to upload ${docType}`)
     } finally {
-      setLoading(false)
+      setUploading((prev) => ({ ...prev, [docType]: false }))
     }
   }
 
   async function handleProcess() {
     if (!appId) return
+    setLoading(true)
+    setError(null)
+    try {
+      // Trigger workflow (returns 202 immediately — runs in background)
+      await processApplication(appId)
+    } catch (err) {
+      // Non-fatal: navigate to detail page anyway so user can see status
+      console.warn('Workflow trigger error:', err)
+    } finally {
+      setLoading(false)
+    }
     navigate(`/applications/${appId}`)
   }
 
@@ -159,6 +171,19 @@ export default function UploadPage() {
                   required
                   value={form.monthly_income}
                   onChange={(e) => setForm({ ...form, monthly_income: e.target.value })}
+                  className="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-600">Credit Score (300–900)</label>
+                <input
+                  type="number"
+                  required
+                  min="300"
+                  max="900"
+                  value={form.credit_score}
+                  onChange={(e) => setForm({ ...form, credit_score: e.target.value })}
+                  placeholder="e.g. 720"
                   className="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -264,16 +289,20 @@ export default function UploadPage() {
                       type="file"
                       accept=".pdf,.jpg,.jpeg,.png"
                       onChange={(e) =>
-                        setFiles({ ...files, [doc.type]: e.target.files?.[0] ?? null })
+                        setFiles((prev) => ({ ...prev, [doc.type]: e.target.files?.[0] ?? null }))
                       }
                       className="text-xs text-slate-500"
                     />
                     <button
-                      onClick={() => handleUpload(doc.type)}
-                      disabled={!files[doc.type] || loading}
+                      type="button"
+                      onClick={() => {
+                        const file = files[doc.type]
+                        if (file && appId) handleUpload(doc.type, appId, file)
+                      }}
+                      disabled={!files[doc.type] || uploading[doc.type] || loading}
                       className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium rounded-lg"
                     >
-                      Upload
+                      {uploading[doc.type] ? <Spinner size="sm" /> : 'Upload'}
                     </button>
                   </div>
                 )}
@@ -287,7 +316,7 @@ export default function UploadPage() {
               disabled={!allRequiredUploaded || loading}
               className="flex-1 py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-semibold rounded-lg"
             >
-              {loading ? <Spinner size="sm" /> : '✅ View Application →'}
+              {loading ? <Spinner size="sm" /> : '▶ Run AI Workflow & View Results →'}
             </button>
           </div>
 

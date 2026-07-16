@@ -87,6 +87,7 @@ def create_application(
     employer_name: str = Form(None),
     employment_type: str = Form("Salaried"),
     employment_stability_months: int = Form(0),
+    credit_score: int = Form(0),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -102,7 +103,8 @@ def create_application(
             monthly_income=monthly_income,
             employer_name=employer_name,
             employment_type=employment_type,
-            employment_stability_months=employment_stability_months
+            employment_stability_months=employment_stability_months,
+            credit_score=credit_score,
         )
         db.add(applicant)
         db.flush()
@@ -116,6 +118,7 @@ def create_application(
         if employer_name is not None: applicant.employer_name = employer_name
         if employment_type is not None: applicant.employment_type = employment_type
         if employment_stability_months != 0: applicant.employment_stability_months = employment_stability_months
+        if credit_score != 0: applicant.credit_score = credit_score
 
     # Create application
     application = Application(

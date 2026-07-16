@@ -52,6 +52,8 @@ class WorkflowOrchestrator:
         workflow.add_node("fairness", self._node_fairness)
         workflow.add_node("governance", self._node_governance)
         workflow.add_node("waiting_human", self._node_waiting_human)
+        # Error terminal node — all conditional "error" edges land here
+        workflow.add_node("error", self._node_error)
         
         # Add edges
         workflow.add_edge(START, "intake")
@@ -68,8 +70,8 @@ class WorkflowOrchestrator:
         workflow.add_conditional_edges("fairness", self._check_fairness_success)
         
         workflow.add_edge("governance", "waiting_human")
-        
         workflow.add_edge("waiting_human", END)
+        workflow.add_edge("error", END)
         
         return workflow.compile()
     
@@ -115,6 +117,16 @@ class WorkflowOrchestrator:
         logger.info(f"Workflow complete. Waiting for human underwriter for application {state.application_id}")
         return {
             "final_status": "PENDING_REVIEW"
+        }
+
+    async def _node_error(self, state: WorkflowState) -> Dict[str, Any]:
+        """Terminal error node — workflow ends here when any agent sets error_message"""
+        logger.error(
+            f"Workflow terminated with error for application {state.application_id}: "
+            f"{state.error_message} (stage: {state.error_at_stage})"
+        )
+        return {
+            "final_status": "FAILED"
         }
     
     # Conditional edge checkers

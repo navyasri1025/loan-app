@@ -184,13 +184,10 @@ class IntakeAgent(BaseAgent):
     ) -> Dict[str, Any]:
         """Verify all required fields are present"""
         required = {
-            "applicant_email": applicant.user.email if applicant.user else None,
-            "applicant_phone": applicant.phone,
             "applicant_name": applicant.user.full_name if applicant.user else None,
             "loan_amount": application.loan_amount,
             "loan_purpose": application.loan_purpose,
             "term_months": application.term_months,
-            "monthly_debt": application.monthly_debt_obligations,
         }
 
         missing = [k for k, v in required.items() if not v]

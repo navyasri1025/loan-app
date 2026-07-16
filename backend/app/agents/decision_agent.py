@@ -432,3 +432,4 @@ class DecisionAgent(BaseAgent):
             db.add(db_rec)
 
         db.flush()
+        db.commit()

@@ -3,13 +3,14 @@
  * Links to Validation, Scoring, Recommendation, Fairness, Human Decision, and Audit pages.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import {
   getApplication,
   getDocuments,
   getRecommendation,
   processApplication,
+  getWorkflowStatus,
   type Application,
   type Document,
 } from '../api/client'
@@ -66,26 +67,58 @@ export default function ApplicationDetailPage() {
       .finally(() => setLoading(false))
   }, [appId])
 
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Poll workflow-status until terminal state
+  function startPolling() {
+    if (pollRef.current) return
+    pollRef.current = setInterval(async () => {
+      try {
+        const ws = await getWorkflowStatus(appId)
+        const terminal = ['PENDING_REVIEW', 'APPROVED', 'DECLINED', 'REFER', 'HOLD', 'FAILED', 'DRAFT']
+        if (terminal.includes(ws.status)) {
+          stopPolling()
+          const [a, r] = await Promise.all([
+            getApplication(appId),
+            getRecommendation(appId).catch(() => null),
+          ])
+          setApp(a)
+          setRecommendation(r as Record<string, unknown> | null)
+          setProcessing(false)
+          setSuccess(`Workflow complete! Status: ${ws.status}`)
+        }
+      } catch {
+        // keep polling; transient error
+      }
+    }, 3000)
+  }
+
+  function stopPolling() {
+    if (pollRef.current) {
+      clearInterval(pollRef.current)
+      pollRef.current = null
+    }
+  }
+
+  // Clean up on unmount
+  useEffect(() => () => stopPolling(), [])
+
   async function handleProcess() {
     setProcessing(true)
     setError(null)
+    setSuccess(null)
     try {
-      const result = await processApplication(appId)
-      setSuccess(`Workflow complete! Final status: ${result.final_status}`)
-      const [a, r] = await Promise.all([
-        getApplication(appId),
-        getRecommendation(appId).catch(() => null),
-      ])
-      setApp(a)
-      setRecommendation(r as Record<string, unknown> | null)
+      await processApplication(appId)
+      // Backend returns 202 immediately — start polling for completion
+      setSuccess('Workflow started — processing your application…')
+      startPolling()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Processing failed')
-    } finally {
       setProcessing(false)
     }
   }
 
-  const canProcess = user?.role === 'Underwriter' || user?.role === 'CreditManager'
+  const canProcess = !!user
 
   if (loading) return <div className="flex justify-center pt-20"><Spinner size="lg" /></div>
   if (!app) return <Alert type="error">Application not found</Alert>

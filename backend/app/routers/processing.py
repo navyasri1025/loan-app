@@ -4,7 +4,7 @@ Application Processing API Endpoints
 Handles workflow execution, status tracking, and human approval.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from datetime import datetime
 from typing import Optional, List
@@ -26,109 +26,158 @@ router = APIRouter(prefix="/api/applications", tags=["application-processing"])
 orchestrator = WorkflowOrchestrator()
 
 
+async def _run_workflow_background(
+    application_id: int,
+    payload: InputPayload,
+    db: Session,
+):
+    """Execute the LangGraph workflow in the background and persist results."""
+    try:
+        result = await orchestrator.execute_workflow(payload)
+
+        # Re-open a fresh DB connection in the background task
+        from app.database import SessionLocal
+        bg_db = SessionLocal()
+        try:
+            application = bg_db.query(Application).filter(
+                Application.id == application_id
+            ).first()
+
+            if not application:
+                logger.error(f"Background task: application {application_id} not found")
+                return
+
+            if result.errors:
+                application.status = "FAILED"
+                logger.warning(
+                    f"Workflow failed for application {application_id}: {result.errors}"
+                )
+            else:
+                application.status = result.final_status or "PENDING_REVIEW"
+                if result.ai_recommendation:
+                    from app.models.recommendation import Recommendation as DBRecommendation
+                    existing_rec = bg_db.query(DBRecommendation).filter(
+                        DBRecommendation.application_id == application_id
+                    ).first()
+
+                    citations = result.ai_recommendation.policy_citations
+                    citations_json = citations if isinstance(citations, list) else []
+                    explanation = (
+                        result.ai_recommendation.reason
+                        or result.ai_recommendation.explanation
+                        or "No explanation provided"
+                    )
+
+                    if existing_rec:
+                        existing_rec.recommendation = result.ai_recommendation.recommendation or "REFER"
+                        existing_rec.confidence_score = result.ai_recommendation.confidence or 0.8
+                        existing_rec.explanation = explanation
+                        existing_rec.policy_citations = citations_json
+                        existing_rec.generated_at = datetime.utcnow()
+                    else:
+                        db_rec = DBRecommendation(
+                            application_id=application_id,
+                            recommendation=result.ai_recommendation.recommendation or "REFER",
+                            confidence_score=result.ai_recommendation.confidence or 0.8,
+                            explanation=explanation,
+                            policy_citations=citations_json,
+                        )
+                        bg_db.add(db_rec)
+
+            application.updated_at = datetime.utcnow()
+            bg_db.commit()
+            logger.info(
+                f"Background workflow completed for application {application_id}: {result.final_status}"
+            )
+        finally:
+            bg_db.close()
+
+    except Exception as e:
+        logger.error(
+            f"Background workflow exception for application {application_id}: {e}",
+            exc_info=True,
+        )
+        # Mark application as FAILED so the frontend polling terminates
+        from app.database import SessionLocal
+        err_db = SessionLocal()
+        try:
+            application = err_db.query(Application).filter(
+                Application.id == application_id
+            ).first()
+            if application:
+                application.status = "FAILED"
+                application.updated_at = datetime.utcnow()
+                err_db.commit()
+        finally:
+            err_db.close()
+
+
 @router.post("/{application_id}/process")
 async def process_application(
     application_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-) -> WorkflowOutput:
+) -> dict:
     """
-    Start the AI workflow for an application.
-    
-    Executes the complete LangGraph workflow:
-    Intake → OCR → Validation → Policy → Decision → Fairness → Governance
-    
-    The workflow will not make final decisions - it generates recommendations only.
-    A human underwriter must review and approve/decline.
+    Start the AI workflow for an application (non-blocking).
+
+    Returns 202 Accepted immediately and runs the LangGraph pipeline
+    (Intake → OCR → Validation → Policy → Decision → Fairness → Governance)
+    in the background.
+
+    Poll GET /{application_id}/workflow-status to track progress.
     """
-    
+
     logger.info(
         f"Processing application {application_id}",
-        extra={"application_id": application_id, "user_id": current_user.id}
+        extra={"application_id": application_id, "user_id": current_user.id},
     )
-    
+
     # Get application
     application = db.query(Application).filter(
         Application.id == application_id
     ).first()
-    
+
     if not application:
-        raise NotFoundException(
-            detail=f"Application {application_id} not found"
-        )
-    
-    # Check authorization - only underwriter/credit manager can process
-    if current_user.role not in ["Underwriter", "CreditManager"]:
-        raise AuthorizationException(
-            detail="Only underwriters can process applications"
-        )
-    
-    # Get documents for the application
+        raise NotFoundException(detail=f"Application {application_id} not found")
+
+    # Applicants can only process their own applications
+    if current_user.role == "Applicant" and application.applicant_id != current_user.id:
+        raise AuthorizationException(detail="You can only process your own applications")
+
+    # Mark as processing immediately so UI can reflect the change
+    application.status = "SUBMITTED"
+    application.updated_at = datetime.utcnow()
+    db.commit()
+
+    # Build documents list
     documents = [
         {
             "file_id": str(doc.id),
             "file_name": doc.file_path,
-            "document_type": doc.document_type
+            "document_type": doc.document_type,
         }
         for doc in application.documents
     ]
-    
-    # Create workflow input
+
     payload = InputPayload(
         application_id=application_id,
         applicant_id=application.applicant_id,
         user_id=current_user.id,
-        documents=documents
+        documents=documents,
     )
-    
-    # Execute workflow
-    result = await orchestrator.execute_workflow(payload)
-    
-    # Update application status
-    if result.errors:
-        application.status = "DRAFT"
-        logger.warning(
-            f"Workflow failed for application {application_id}: {result.errors}",
-            extra={"application_id": application_id}
-        )
-    else:
-        application.status = result.final_status or "PENDING_REVIEW"
-        if result.ai_recommendation:
-            from app.models.recommendation import Recommendation as DBRecommendation
-            existing_rec = db.query(DBRecommendation).filter(
-                DBRecommendation.application_id == application_id
-            ).first()
-            
-            citations = result.ai_recommendation.policy_citations
-            citations_json = citations if isinstance(citations, list) else []
-            
-            explanation = result.ai_recommendation.reason or result.ai_recommendation.explanation or "No explanation provided"
-            
-            if existing_rec:
-                existing_rec.recommendation = result.ai_recommendation.recommendation or "REFER"
-                existing_rec.confidence_score = result.ai_recommendation.confidence or 0.8
-                existing_rec.explanation = explanation
-                existing_rec.policy_citations = citations_json
-                existing_rec.generated_at = datetime.utcnow()
-            else:
-                db_rec = DBRecommendation(
-                    application_id=application_id,
-                    recommendation=result.ai_recommendation.recommendation or "REFER",
-                    confidence_score=result.ai_recommendation.confidence or 0.8,
-                    explanation=explanation,
-                    policy_citations=citations_json
-                )
-                db.add(db_rec)
-    
-    application.updated_at = datetime.utcnow()
-    db.commit()
-    
-    logger.info(
-        f"Application processing completed: {result.final_status}",
-        extra={"application_id": application_id}
-    )
-    
-    return result
+
+    # Schedule workflow in background — returns 202 immediately
+    background_tasks.add_task(_run_workflow_background, application_id, payload, db)
+
+    logger.info(f"Workflow queued for application {application_id}")
+
+    return {
+        "application_id": application_id,
+        "status": "SUBMITTED",
+        "message": "Workflow started. Poll /workflow-status for progress.",
+    }
 
 
 @router.get("/{application_id}/workflow-status")

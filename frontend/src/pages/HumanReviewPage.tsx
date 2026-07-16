@@ -49,6 +49,19 @@ export default function HumanReviewPage() {
 
   const canDecide = user?.role === 'Underwriter' || user?.role === 'CreditManager'
 
+  if (!id || isNaN(appId)) {
+    return (
+      <div className="space-y-4 max-w-xl">
+        <h1 className="text-2xl font-bold text-slate-800">Human Decision</h1>
+        <Alert type="warning">
+          No application selected. Go to{' '}
+          <a href="/applications" className="underline text-blue-600">Applications</a>{' '}
+          and open an application to access the Human Decision page.
+        </Alert>
+      </div>
+    )
+  }
+
   useEffect(() => {
     Promise.all([
       getApplication(appId),

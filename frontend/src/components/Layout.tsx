@@ -18,12 +18,6 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/dashboard',    icon: '🏠', label: 'Dashboard' },
   { to: '/applications', icon: '📋', label: 'Applications' },
   { to: '/upload',       icon: '📤', label: 'New Application', roles: ['Applicant'] },
-  { to: '/validation',   icon: '🔍', label: 'Validation',  roles: ['Underwriter','CreditManager','Auditor'] },
-  { to: '/scoring',      icon: '📊', label: 'Policy Score', roles: ['Underwriter','CreditManager','Auditor'] },
-  { to: '/recommendation',icon: '🤖', label: 'Recommendation', roles: ['Underwriter','CreditManager'] },
-  { to: '/fairness',     icon: '⚖️', label: 'Fairness',    roles: ['Underwriter','CreditManager','Auditor'] },
-  { to: '/human-review', icon: '👨‍⚖️', label: 'Human Decision', roles: ['Underwriter','CreditManager'] },
-  { to: '/audit',        icon: '📜', label: 'Audit Logs',  roles: ['Underwriter','CreditManager','Auditor'] },
   { to: '/demo',         icon: '🧪', label: 'Demo Scenarios' },
 ]
 
