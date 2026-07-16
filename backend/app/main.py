@@ -33,7 +33,10 @@ logger.info("FastAPI application created")
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Adjust for production
+    allow_origins=[
+        "http://localhost:5173",
+        "https://loan-app-nine-kohl.vercel.app",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
